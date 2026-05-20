@@ -23,35 +23,42 @@ from supabase import create_client, Client
 # ---------------------------------------------------------------------------
 # Paths & environment
 # ---------------------------------------------------------------------------
-REPO_ROOT = Path(__file__).resolve().parents[2]
+APP_DIR = Path(__file__).resolve().parent
+# 로컬: 7.MultiService/code → AI-Education 루트 / Cloud: 앱이 repo 루트에 있으면 APP_DIR
+REPO_ROOT = APP_DIR.parents[2] if (APP_DIR.parents[2] / ".env").is_file() else APP_DIR
 ENV_PATH = REPO_ROOT / ".env"
-LOGO_PATH = REPO_ROOT / "logo.png"
+LOGO_PATH = REPO_ROOT / "logo.png" if (REPO_ROOT / "logo.png").is_file() else APP_DIR / "logo.png"
 LOG_DIR = REPO_ROOT / "logs"
 
-load_dotenv(dotenv_path=ENV_PATH)
+if ENV_PATH.is_file():
+    load_dotenv(dotenv_path=ENV_PATH)
+else:
+    load_dotenv()
 
 
 # ---------------------------------------------------------------------------
-# Logging
+# Logging (Streamlit Cloud는 앱 디렉터리 쓰기 불가 → 파일 로그 생략)
 # ---------------------------------------------------------------------------
 def _setup_logging() -> logging.Logger:
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log_name = f"multiusers_{datetime.now().strftime('%Y%m%d')}.log"
-    log_path = LOG_DIR / log_name
-
     root = logging.getLogger()
     root.handlers.clear()
     root.setLevel(logging.WARNING)
 
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-    fh = logging.FileHandler(log_path, encoding="utf-8")
-    fh.setLevel(logging.WARNING)
-    fh.setFormatter(fmt)
     ch = logging.StreamHandler()
     ch.setLevel(logging.WARNING)
     ch.setFormatter(fmt)
-    root.addHandler(fh)
     root.addHandler(ch)
+
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        log_path = LOG_DIR / f"multiusers_{datetime.now().strftime('%Y%m%d')}.log"
+        fh = logging.FileHandler(log_path, encoding="utf-8")
+        fh.setLevel(logging.WARNING)
+        fh.setFormatter(fmt)
+        root.addHandler(fh)
+    except (PermissionError, OSError):
+        pass
 
     for name in ("httpx", "httpcore", "urllib3", "openai", "langchain", "langchain_openai"):
         logging.getLogger(name).setLevel(logging.WARNING)
